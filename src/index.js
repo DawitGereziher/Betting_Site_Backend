@@ -12,7 +12,13 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || "*").split(",");
+const envOrigins = (process.env.ALLOWED_ORIGINS || "*").split(",");
+const allowedOrigins = [
+    ...envOrigins,
+    "https://anbesabet.com",
+    "https://www.anbesabet.com",
+    "https://anbesa.anbesabet.com"
+];
 
 app.use(cors({
     origin: (origin, callback) => {
@@ -33,18 +39,6 @@ app.use(cors({
 app.use(express.json());
 // ---- HEALTH CHECK ----
 app.get("/health", (req, res) => {
-    const dbUrl = process.env.DATABASE_URL || "UNDEFINED";
-    let maskedUrl = "UNDEFINED";
-    try {
-        if (dbUrl !== "UNDEFINED" && dbUrl.includes("@")) {
-            maskedUrl = dbUrl.replace(/:([^:@]+)@/, ":****@");
-        } else {
-            maskedUrl = dbUrl;
-        }
-    } catch (e) {
-        maskedUrl = "ERROR_MASKING";
-    }
-
     res.status(200).json({
         status: "ok",
         service: "betting-backend",
@@ -52,12 +46,6 @@ app.get("/health", (req, res) => {
         timestamp: new Date().toISOString(),
         port: PORT,
         node_version: process.version,
-        cwd: process.cwd(),
-        database_config: {
-            url_masked: maskedUrl,
-            // Try to extract host for easier debugging
-            host: dbUrl.includes("@") ? dbUrl.split("@")[1]?.split("/")[0] : "UNKNOWN"
-        },
         memory: {
             rss: process.memoryUsage().rss,
             heapUsed: process.memoryUsage().heapUsed

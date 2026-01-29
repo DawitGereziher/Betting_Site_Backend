@@ -65,7 +65,7 @@ setInterval(() => __awaiter(void 0, void 0, void 0, function* () {
     catch (error) {
         console.error("[Background] Failed to refresh odds:", error);
     }
-}), 60 * 1000); // 60 seconds
+}), 5 * 60 * 1000); // 5 minutes
 app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
 });

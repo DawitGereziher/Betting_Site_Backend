@@ -22,21 +22,145 @@ function getScores(fixture) {
         }
     };
 }
+// Fallback Mappings (Based on User JSON)
+// Fallback Mappings (Based on User JSON)
+function getMarketCode(apiName) {
+    const lower = apiName.toLowerCase();
+    // SPECIFIC / COMPLEX MARKETS FIRST (Prevent partial matching issues)
+    // --- HALF TIME / FULL TIME ---
+    if (lower.includes("ht/ft") || lower.includes("half-time/full-time") || lower.includes("ht/ft double"))
+        return "HALF_TIME_FULL_TIME";
+    // --- SCORING HALVES ---
+    if (lower.includes("highest scoring half"))
+        return "HIGHEST_SCORING_HALF";
+    if (lower === "win both halves")
+        return "WIN_BOTH_HALVES";
+    // --- CORRECT SCORE ---
+    if (lower.includes("correct score") || lower.includes("exact score")) {
+        // Specific Halves
+        if (lower.includes("first half") || lower.includes("1st half"))
+            return "CORRECT_SCORE_FIRST_HALF";
+        if (lower.includes("second half") || lower.includes("2nd half"))
+            return "CORRECT_SCORE_SECOND_HALF";
+        return "EXACT_SCORE"; // Full Time
+    }
+    // --- FIRST HALF MARKETS ---
+    if (lower.includes("first half") || lower.includes("1st half")) {
+        if (lower.includes("winner"))
+            return "FIRST_HALF_WINNER";
+        if (lower.includes("both teams") && (lower.includes("score") || lower.includes("btts")))
+            return "BTTS_FIRST_HALF";
+        if (lower.includes("goals") || lower.includes("over/under") || lower.includes("total"))
+            return "FIRST_HALF_GOALS";
+        // Fallback for just "First Half"?
+    }
+    // --- SECOND HALF MARKETS ---
+    if (lower.includes("second half") || lower.includes("2nd half")) {
+        if (lower.includes("winner"))
+            return "SECOND_HALF_WINNER";
+        if (lower.includes("both teams") && (lower.includes("score") || lower.includes("btts")))
+            return "BTTS_SECOND_HALF";
+        if (lower.includes("goals") || lower.includes("over/under") || lower.includes("total"))
+            return "SECOND_HALF_GOALS";
+    }
+    // --- GENERIC GOALS (Full Time) ---
+    // Check SPECIFIC Team goals first
+    if (lower === "total - home" || lower.includes("home team total"))
+        return "HOME_TEAM_TOTAL";
+    if (lower === "total - away" || lower.includes("away team total"))
+        return "AWAY_TEAM_TOTAL";
+    // Now generic goals
+    if (lower.includes("goals over/under") || lower.includes("total goals") || lower.includes("goal line"))
+        return "TOTAL_GOALS";
+    // --- MATCH WINNER / RESULT ---
+    if (lower === "match winner" || lower === "match result" || lower === "1x2")
+        return "MATCH_WINNER";
+    // --- DRAW NO BET ---
+    if (lower === "draw no bet" || lower === "home/away")
+        return "DRAW_NO_BET"; // Fixed: Added Home/Away
+    // --- DOUBLE CHANCE ---
+    if (lower === "double chance")
+        return "DOUBLE_CHANCE";
+    // --- BTTS (Full Time) ---
+    if (lower.includes("both teams score") || lower === "both teams to score" || lower === "btts")
+        return "BTTS";
+    // --- HANDICAPS ---
+    if (lower.includes("asian handicap"))
+        return "ASIAN_HANDICAP";
+    if (lower.includes("handicap") && !lower.includes("asian"))
+        return "EUROPEAN_HANDICAP";
+    // --- SPECIALS / OTHERS ---
+    if (lower.includes("odd/even"))
+        return "MATCH_GOALS_ODD_EVEN";
+    if (lower.includes("clean sheet") && lower.includes("home"))
+        return "CLEAN_SHEET_HOME";
+    if (lower.includes("clean sheet") && lower.includes("away"))
+        return "CLEAN_SHEET_AWAY";
+    if (lower.includes("win to nil") && lower.includes("home"))
+        return "WIN_TO_NIL_HOME";
+    if (lower.includes("win to nil") && lower.includes("away"))
+        return "WIN_TO_NIL_AWAY";
+    if (lower === "team to score first" || lower.includes("first team to score"))
+        return "TEAM_TO_SCORE_FIRST";
+    if (lower === "team to score last" || lower.includes("last team to score"))
+        return "TEAM_TO_SCORE_LAST";
+    // If we reach here, it's truly unknown
+    return "UNKNOWN";
+}
+function getSelectionCode(value) {
+    const valStr = String(value);
+    const lower = valStr.toLowerCase().trim();
+    if (lower === "home")
+        return "HOME";
+    if (lower === "draw")
+        return "DRAW";
+    if (lower === "away")
+        return "AWAY";
+    if (lower === "yes")
+        return "YES";
+    if (lower === "no")
+        return "NO";
+    if (lower.includes("over"))
+        return "OVER";
+    if (lower.includes("under"))
+        return "UNDER";
+    // For Exact Score etc, keep as is (normalized later)
+    return valStr.toUpperCase();
+}
 // Logic for each market
 function checkItemResult(marketCode, selectionCode, // e.g. "HOME", "OVER", "1-0"
 line, // e.g. 2.5, -1.0
-fixture, oddValue) {
+fixture, oddValue, 
+// New params for fallback support
+marketName, selectionName) {
     const status = fixture.fixture.status.short;
     // Basic check: Game must be finished
-    // We accept AET/PEN statuses but only use 90-min score
-    // Added AWD (Awarded), WO (Walkover)
     if (!['FT', 'AET', 'PEN', 'AWD', 'WO'].includes(status)) {
-        console.log(`[ResultChecker] Fixture ${fixture.fixture.id} status is '${status}' (Not Final). Returning PENDING.`);
+        // console.log(`[ResultChecker] Fixture ${fixture.fixture.id} status is '${status}' (Not Final). Returning PENDING.`);
         return "PENDING";
+    }
+    // FALLBACK LOGIC: If marketCode is unknown/missing, derive it
+    if ((!marketCode || marketCode === "UNKNOWN") && marketName) {
+        marketCode = getMarketCode(marketName);
+        console.log(`[ResultChecker] Derived marketCode '${marketCode}' from name '${marketName}'`);
+    }
+    // FALLBACK LOGIC: If selectionCode is missing/unknown, derive it
+    if ((!selectionCode || selectionCode === "" || selectionCode === "UNKNOWN") && selectionName) {
+        selectionCode = getSelectionCode(selectionName);
+        console.log(`[ResultChecker] Derived selectionCode '${selectionCode}' from name '${selectionName}'`);
     }
     // Normalize codes to be case-insensitive
     marketCode = marketCode.toUpperCase();
     selectionCode = selectionCode.toUpperCase();
+    // FALLBACK LOGIC: If line is missing, try to parse it from selectionName
+    // e.g. "Over 0.5", "Under 2.5 Goals"
+    if ((line === null || line === undefined) && selectionName) {
+        const match = selectionName.match(/(\d+(\.\d+)?)/);
+        if (match) {
+            line = parseFloat(match[0]);
+            console.log(`[ResultChecker] Derived line '${line}' from selectionName '${selectionName}'`);
+        }
+    }
     const s = getScores(fixture);
     switch (marketCode) {
         // --- MATCH WINNER & RELATED ---
@@ -49,6 +173,7 @@ fixture, oddValue) {
                 return s.ft.home < s.ft.away ? "WON" : "LOST";
             break;
         case "HOME_AWAY": // Draw No Bet (DNB)
+        case "DRAW_NO_BET":
             if (s.ft.home === s.ft.away)
                 return "VOID";
             if (selectionCode === "HOME")
@@ -102,6 +227,7 @@ fixture, oddValue) {
             }
             break;
         case "HT_FT_DOUBLE": // Half-Time/Full-Time
+        case "HALF_TIME_FULL_TIME":
             // Format example: "Home/Draw" or "1/X"
             const [htRaw, ftRaw] = selectionCode.split("/");
             if (htRaw && ftRaw) {
@@ -183,6 +309,18 @@ fixture, oddValue) {
                 return (s.ft.home > 0 && s.ft.away > 0) ? "WON" : "LOST";
             if (selectionCode === "NO")
                 return (s.ft.home === 0 || s.ft.away === 0) ? "WON" : "LOST";
+            break;
+        case "BTTS_FIRST_HALF":
+            if (selectionCode === "YES")
+                return (s.ht.home > 0 && s.ht.away > 0) ? "WON" : "LOST";
+            if (selectionCode === "NO")
+                return (s.ht.home === 0 || s.ht.away === 0) ? "WON" : "LOST";
+            break;
+        case "BTTS_SECOND_HALF":
+            if (selectionCode === "YES")
+                return (s.secondHalf.home > 0 && s.secondHalf.away > 0) ? "WON" : "LOST";
+            if (selectionCode === "NO")
+                return (s.secondHalf.home === 0 || s.secondHalf.away === 0) ? "WON" : "LOST";
             break;
         case "WIN_TO_NIL_HOME":
             // Home wins AND Away scores 0
@@ -274,31 +412,37 @@ fixture, oddValue) {
                     selectedScore = s.ft.away;
                     otherScore = s.ft.home;
                 }
+                else if (effectiveSelection === "DRAW" && marketCode === "EUROPEAN_HANDICAP") {
+                    // Handled in EH block below
+                    selectedScore = 0;
+                    otherScore = 0;
+                }
                 else {
-                    return "PENDING"; // DRAW? 
+                    return "PENDING";
                 }
                 // Effective score comparison
                 // Check for Draw (EH)
                 if (marketCode === "EUROPEAN_HANDICAP") {
-                    // EH has 3 options: Home(-1), Draw(-1), Away(+1)??
-                    // Actually usually "Draw (-1)" means Home -1Result == Away Result
-                    // But wait, if selection is "DRAW", we need to handle that.
-                    // "DRAW -1" -> Home starts with -1, match ends in draw?
-                    // Or "Handicap Draw -1" usually means Home wins by exactly 1 goal.
-                    // If the user selection was "HOME -1", effectiveSelection="HOME", line=-1.
-                    // If user selection was "DRAW (0-1)", effectiveSelection="DRAW"?
-                    // Let's stick to the simple logic: Line added to SELECTION.
-                    const resScore = selectedScore + effectiveLine;
-                    if (resScore > otherScore)
-                        return "WON";
-                    if (resScore < otherScore)
+                    // EH Rules: 3-Way Market. No Voids.
+                    // Home (-1): (Home - 1) > Away
+                    // Draw (-1): (Home - 1) == Away
+                    // Away (+1): (Away + 1) > Home [Note: usually expressed as local line]
+                    // If selection is DRAW, standard convention is Home-based Line?
+                    // E.g. "Draw (-1)" usually matches "Home (-1)" handicap.
+                    // Let's assume the line is always relative to Home for DRAW picks.
+                    if (effectiveSelection === "DRAW") {
+                        const scoreA = s.ft.home;
+                        const scoreB = s.ft.away;
+                        // Determine if Match?
+                        // Using epsilon for safety with floats (though scores usually ints)
+                        if (Math.abs((scoreA + effectiveLine) - scoreB) < 0.1)
+                            return "WON";
                         return "LOST";
-                    // Valid for Asian? Void. For European? Lost (since Draw exists)
-                    // If market is EH and result is equal, and we picked Home/Away, we LOST.
-                    // Only if we picked DRAW we might win.
-                    // BUT we don't know if "DRAW" is a valid selection logic here yet. 
-                    // Let's assume simple 2-way for now or standard > <.
-                    // If equal:
+                    }
+                    // For HOME/AWAY, we use the selected score + line > other score
+                    if (selectedScore + effectiveLine > otherScore)
+                        return "WON";
+                    // If equal or less, it's LOST (because Draw option exists)
                     return "LOST";
                 }
                 // Asian Handicap (Void on draw)
@@ -319,6 +463,12 @@ fixture, oddValue) {
     }
     // Default fallback if market not recognized or no logic matched
     console.log(`[ResultChecker] Unhandled Market/Selection: ${marketCode} / ${selectionCode} (Line: ${line}) for Fixture ${fixture.fixture.id}`);
+    // Debugging: If game is finished but we are returning PENDING, it's weird.
+    if (['FT', 'AET', 'PEN', 'AWD', 'WO'].includes(status)) {
+        console.warn(`[ResultChecker] WARNING: Returning PENDING for finished game ${fixture.fixture.id} (${status})!`);
+        console.warn(`Details: Market="${marketName}" Code="${marketCode}" | Selection="${selectionName}" Code="${selectionCode}" | Line="${line}"`);
+        console.warn(`Scores: FT=${s.ft.home}-${s.ft.away} | HT=${s.ht.home}-${s.ht.away}`);
+    }
     return "PENDING";
 }
 function checkTeamGoalOrder(fixture, selectionCode, mode) {
@@ -352,5 +502,21 @@ function checkTeamGoalOrder(fixture, selectionCode, mode) {
         scoringTeam = "HOME";
     else if (goalTeamId === awayId)
         scoringTeam = "AWAY";
-    return selectionCode === scoringTeam ? "WON" : "LOST";
+    // 1. Direct Match (HOME/AWAY)
+    if (selectionCode === scoringTeam)
+        return "WON";
+    // 2. Name Match (e.g. Selection "AC Milan" vs Team Name "AC Milan")
+    // Retrieve Name for the scoring team
+    let specificTeamName = "";
+    if (scoringTeam === "HOME")
+        specificTeamName = fixture.teams.home.name;
+    if (scoringTeam === "AWAY")
+        specificTeamName = fixture.teams.away.name;
+    if (specificTeamName && selectionCode.toUpperCase() === specificTeamName.toUpperCase()) {
+        return "WON";
+    }
+    // 3. Check for loss conditions
+    // If scoringTeam found but doesn't match selection, and selection isn't the OTHER team?
+    // Actually, if we found a goal, and it wasn't the selected one, it's LOST (unless checking First Goal and this is the second goal, but we pre-filtered targetGoal).
+    return "LOST";
 }

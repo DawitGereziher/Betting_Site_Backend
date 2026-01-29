@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -165,7 +198,18 @@ router.get("/dashboard", (req, res) => __awaiter(void 0, void 0, void 0, functio
             totalReceived,
             totalSlips,
             totalPaid,
-            payoutCount
+            payoutCount,
+            bets: incomingBets.map(bet => ({
+                id: bet.id,
+                reference: bet.reference,
+                amount: bet.amount,
+                totalOdds: bet.totalOdds,
+                potentialWin: bet.amount * bet.totalOdds,
+                status: bet.status,
+                createdAt: bet.createdAt,
+                confirmedAt: bet.confirmedAt,
+                cashierId: bet.cashierId
+            }))
         });
     }
     catch (error) {
@@ -240,7 +284,7 @@ router.post('/confirm', (req, res) => __awaiter(void 0, void 0, void 0, function
                 status: 'CONFIRMED',
                 cashierId: validCashierId, // Will be null if invalid/unknown
                 confirmedAt: new Date(),
-                confirmationReference: `CNF-${Date.now().toString().slice(-6)}`
+                confirmationReference: Date.now().toString()
             },
             include: { items: true }
         });
@@ -283,26 +327,43 @@ router.post("/check-slip", (req, res) => __awaiter(void 0, void 0, void 0, funct
         const fixturesMap = {};
         // Fetch fixtures in parallel
         yield Promise.all(fixtureIds.map((fid) => __awaiter(void 0, void 0, void 0, function* () {
+            const params = new URLSearchParams();
+            params.set("id", fid.toString());
             try {
-                const params = new URLSearchParams();
-                params.set("id", fid.toString());
-                const fRes = yield (0, apiFootball_1.apiFootballGet)("/fixtures", params);
+                // Try Force refresh first to get latest result
+                const fRes = yield (0, apiFootball_1.apiFootballGet)("/fixtures", params, 60000, true);
                 if (fRes.response && fRes.response.length > 0) {
                     fixturesMap[fid] = fRes.response[0];
                 }
             }
             catch (e) {
-                console.error(`Failed to fetch fixture ${fid}`, e);
+                console.warn(`Force refresh failed for fixture ${fid}, trying cache...`, e);
+                // Fallback to cache without force refresh
+                try {
+                    const fResCache = yield (0, apiFootball_1.apiFootballGet)("/fixtures", params, 60000, false);
+                    if (fResCache.response && fResCache.response.length > 0) {
+                        fixturesMap[fid] = fResCache.response[0];
+                    }
+                }
+                catch (e2) {
+                    console.error(`Failed to fetch fixture ${fid} from cache too`, e2);
+                }
             }
         })));
         // Check each item
+        // Import metadata cache
+        const { getFixtureMetadata } = yield Promise.resolve().then(() => __importStar(require("../lib/fixtureMetadataCache")));
         for (const item of bet.items) {
             const fixture = fixturesMap[item.fixtureId];
             let itemResult = item.result; // Use 'result' field
+            // FALLBACK: If API doesn't have fixture, try permanent cache for details
+            let fallbackDetails = null;
             if (fixture) {
                 // Check result
                 const checkRes = (0, resultChecker_1.checkItemResult)(item.marketCode || "UNKNOWN", // Handle null
-                item.selectionCode || "", item.line, fixture, item.oddValue);
+                item.selectionCode || "", item.line, fixture, item.oddValue, item.market, // Fallback: Raw Market Name
+                item.selection // Fallback: Raw Selection Name
+                );
                 if (checkRes === "WON") {
                     itemResult = "WON";
                 }
@@ -327,6 +388,17 @@ router.post("/check-slip", (req, res) => __awaiter(void 0, void 0, void 0, funct
                 }
             }
             else {
+                const cachedMetadata = getFixtureMetadata(item.fixtureId);
+                if (cachedMetadata) {
+                    console.log(`[POST /check-slip] Using cached metadata for fixture ${item.fixtureId}`);
+                    fallbackDetails = {
+                        home: cachedMetadata.home,
+                        away: cachedMetadata.away,
+                        date: cachedMetadata.date,
+                        status: { short: 'UNK', long: 'Unknown Status' },
+                        score: { home: null, away: null }
+                    };
+                }
                 allItemsResolved = false; // Cannot resolving without fixture
             }
             updatedItems.push(Object.assign(Object.assign({}, item), { result: itemResult, fixtureDetails: fixture ? {
@@ -335,7 +407,7 @@ router.post("/check-slip", (req, res) => __awaiter(void 0, void 0, void 0, funct
                     date: fixture.fixture.date,
                     status: fixture.fixture.status,
                     score: fixture.score.fulltime
-                } : null }));
+                } : fallbackDetails }));
         }
         // Determine Bet Status
         let newBetStatus = bet.status;

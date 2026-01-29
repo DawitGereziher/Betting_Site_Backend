@@ -50,7 +50,8 @@ function getMarketCode(apiName) {
 }
 // Map selection values to selection codes (Internal Use Only)
 function getSelectionCode(value, // Allow loose types
-marketCode) {
+marketCode, marketName = "" // Added marketName for fallback line extraction
+) {
     // Handle null/undefined
     if (value === null || value === undefined) {
         return { code: "", line: null };
@@ -85,11 +86,17 @@ marketCode) {
     }
     // TOTAL_GOALS
     // TOTAL_GOALS / TEAM TOTALS
-    if (marketCode === "TOTAL_GOALS" || marketCode === "HOME_TEAM_TOTAL" || marketCode === "AWAY_TEAM_TOTAL") {
+    if (marketCode === "TOTAL_GOALS" || marketCode === "HOME_TEAM_TOTAL" || marketCode === "AWAY_TEAM_TOTAL" || marketCode.includes("FIRST_HALF_GOALS") || marketCode.includes("SECOND_HALF_GOALS")) {
         const isOver = lower.includes("over");
         const isUnder = lower.includes("under");
-        const match = valStr.match(/(\d+\.?\d*)/);
-        const line = match ? parseFloat(match[1]) : null;
+        // Try extracting line from selection first (e.g. "Over 2.5")
+        let match = valStr.match(/(\d+\.?\d*)/);
+        let line = match ? parseFloat(match[1]) : null;
+        // If no line in selection, try extracting from market name (e.g. "Over/Under 2.5 Goals")
+        if (line === null && marketName) {
+            match = marketName.match(/(\d+\.?\d*)/);
+            line = match ? parseFloat(match[1]) : null;
+        }
         if (isOver)
             return { code: "OVER", line };
         if (isUnder)
@@ -104,8 +111,13 @@ marketCode) {
         // Extract number. Supports negative and positive. 
         // Regex: look for a number (integer or decimal) potentially preceded by + or -
         // Note: The input might be "Home -1". Match "-1". "Home +1" Match "+1".
-        const match = valStr.match(/([+-]?\d+\.?\d*)/);
-        const line = match ? parseFloat(match[1]) : null;
+        let match = valStr.match(/([+-]?\d+\.?\d*)/);
+        let line = match ? parseFloat(match[1]) : null;
+        // Fallback to market name if selection has no number (e.g. market "Asian Handicap -1.5", selection "Home")
+        if (line === null && marketName) {
+            match = marketName.match(/([+-]?\d+\.?\d*)/);
+            line = match ? parseFloat(match[1]) : null;
+        }
         if (isHome)
             return { code: "HOME", line };
         if (isAway)
@@ -149,7 +161,8 @@ function normalizeMarkets(apiResponse) {
             // "odd = decimal odd (string -> convert to float)"
             const label = val.value !== null && val.value !== undefined ? String(val.value) : "";
             const marketCode = getMarketCode(marketName);
-            const { code, line } = getSelectionCode(label, marketCode);
+            // PASS MARKET NAME for fallback line extraction
+            const { code, line } = getSelectionCode(label, marketCode, marketName);
             return {
                 label: label,
                 value: label,

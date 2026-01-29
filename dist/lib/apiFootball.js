@@ -20,13 +20,19 @@ if (!API_KEY) {
 const DEFAULT_TTL_MS = 60 * 1000; // 1 minute
 function apiFootballGet(path_1, params_1) {
     return __awaiter(this, arguments, void 0, function* (path, params, ttlMs = DEFAULT_TTL_MS, forceRefresh = false) {
-        var _a;
+        var _a, _b;
         const query = (_a = params === null || params === void 0 ? void 0 : params.toString()) !== null && _a !== void 0 ? _a : "";
         const cacheKey = `api-football:${path}:${query}`;
         if (!forceRefresh) {
             const cached = (0, cache_1.getFromCache)(cacheKey);
-            if (cached)
+            if (cached) {
+                console.log(`[API-FOOTBALL] Cache HIT for ${path}?${query}`);
                 return cached;
+            }
+            console.log(`[API-FOOTBALL] Cache MISS for ${path}?${query}`);
+        }
+        else {
+            console.log(`[API-FOOTBALL] Force refresh (skipping cache) for ${path}?${query}`);
         }
         if (!API_KEY) {
             throw new Error("API-FOOTBALL key not configured");
@@ -38,11 +44,16 @@ function apiFootballGet(path_1, params_1) {
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+                const headers = {
+                    "x-apisports-key": API_KEY,
+                };
+                if (forceRefresh) {
+                    headers["Cache-Control"] = "no-cache";
+                    headers["Pragma"] = "no-cache";
+                }
                 const res = yield fetch(url, {
                     method: "GET",
-                    headers: {
-                        "x-apisports-key": API_KEY,
-                    },
+                    headers,
                     // server-side only
                     cache: "no-store",
                     signal: controller.signal
@@ -52,6 +63,7 @@ function apiFootballGet(path_1, params_1) {
                     throw new Error(`API-FOOTBALL error: ${res.status} ${res.statusText}`);
                 }
                 const json = yield res.json();
+                console.log(`[API-FOOTBALL] SUCCESS for ${path}?${query} - Response has ${((_b = json.response) === null || _b === void 0 ? void 0 : _b.length) || 0} items`);
                 (0, cache_1.setInCache)(cacheKey, json, ttlMs);
                 return json;
             }

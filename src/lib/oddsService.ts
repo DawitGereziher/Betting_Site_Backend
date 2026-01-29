@@ -10,6 +10,7 @@ export interface FrontendSelection {
 }
 
 export interface FrontendMarket {
+    id?: string;
     market: string;
     marketCode: string;
     bets: FrontendSelection[];
@@ -100,7 +101,12 @@ function mapOddsToFrontend(oddsResponse: any): FrontendMarket[] {
 
         const marketCode = getMarketCode(bet.name);
 
+        // Generate a composite ID to ensure uniqueness for markets with same ID/Name but different lines
+        // e.g. "Total Home" (Over 0.5) vs "Total Home" (Over 1.5)
+        const uniqueId = `${bet.id}_${bet.name}_${bet.values[0]?.value || 'Gen'}`.replace(/\s+/g, '_');
+
         const frontendMarket: FrontendMarket = {
+            id: uniqueId,
             market: bet.name,
             marketCode: marketCode,
             bets: []

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -72,88 +105,110 @@ router.get("/ticket", (req, res) => __awaiter(void 0, void 0, void 0, function* 
             return res.status(404).json({ error: "Ticket not found" });
         }
         // Fetch fixtures and fresh odds for details
-        const fixtureIds = bet.items.map((item) => item.fixtureId);
+        const fixtureIds = [...new Set(bet.items.map((item) => item.fixtureId))];
+        console.log(`[GET /ticket] Fetching fixtures for IDs:`, fixtureIds);
         const fixtures = [];
-        // Map items to their fresh data
-        // We will attach 'currentOdd' and 'isStarted' to the items in the response
+        const fixturesMap = {};
+        // 1. Fetch Unique Fixtures in Parallel
+        yield Promise.all(fixtureIds.map((fid) => __awaiter(void 0, void 0, void 0, function* () {
+            const params = new URLSearchParams();
+            params.set("id", fid.toString());
+            try {
+                // Try cache first for reliability (avoid API timeouts)
+                const fRes = yield (0, apiFootball_1.apiFootballGet)("/fixtures", params, 60000, false);
+                if (fRes.response && fRes.response.length > 0) {
+                    const data = fRes.response[0];
+                    fixtures.push(data);
+                    fixturesMap[fid] = data;
+                }
+            }
+            catch (e) {
+                console.error(`Failed to fetch fixture ${fid} from cache, trying force refresh...`, e);
+                // Fallback to force refresh if cache fails
+                try {
+                    const fResForce = yield (0, apiFootball_1.apiFootballGet)("/fixtures", params, 60000, true);
+                    if (fResForce.response && fResForce.response.length > 0) {
+                        const data = fResForce.response[0];
+                        fixtures.push(data);
+                        fixturesMap[fid] = data;
+                    }
+                }
+                catch (e2) {
+                    console.error(`Failed to fetch fixture ${fid} even with force refresh`, e2);
+                }
+            }
+        })));
+        console.log(`[GET /ticket] Fixtures fetched:`, Object.keys(fixturesMap).length, "out of", fixtureIds.length);
+        console.log(`[GET /ticket] FixturesMap keys:`, Object.keys(fixturesMap));
+        // Import fixture metadata cache for fallback
+        const { getFixtureMetadata, storeFixtureMetadata } = yield Promise.resolve().then(() => __importStar(require("../lib/fixtureMetadataCache")));
+        // Store successfully fetched fixtures in permanent cache
+        for (const fixture of Object.values(fixturesMap)) {
+            storeFixtureMetadata(fixture);
+        }
+        // 2. Map items to their fresh data
         const enrichedItems = [];
         for (const item of bet.items) {
-            let fixtureData = null;
             let currentOdd = item.oddValue; // Default to booked odd
             let isStarted = false;
-            try {
-                // 1. Fetch Fixture Status
-                const params = new URLSearchParams();
-                params.set("id", item.fixtureId.toString());
-                // We ask for 'timezone' if needed, but default is UTC usually.
-                // Note: Calling API for EVERY item individually is slow (N+1). 
-                // Optimization: Fetch unique fixtures in parallel. 
-                // For MVP/Demo I will keep it simple but be aware of rate limits.
-                // Check if we already fetched this fixture in this loop (optimization)
-                const existing = fixtures.find(f => f.fixture.id === item.fixtureId);
-                if (existing) {
-                    fixtureData = existing;
+            const fixtureData = fixturesMap[item.fixtureId];
+            // FALLBACK: If API doesn't have fixture, try permanent cache
+            let fixtureDetails = null;
+            if (fixtureData) {
+                const status = fixtureData.fixture.status.short;
+                // NS = Not Started. Anything else (LIVE, ft, etc.) is considered 'started' for betting purposes mostly
+                if (status !== 'NS' && status !== 'TBD') {
+                    isStarted = true;
                 }
-                else {
-                    const fRes = yield (0, apiFootball_1.apiFootballGet)("/fixtures", params);
-                    if (fRes.response && fRes.response.length > 0) {
-                        fixtureData = fRes.response[0];
-                        fixtures.push(fixtureData);
-                    }
+                fixtureDetails = {
+                    home: fixtureData.teams.home.name,
+                    away: fixtureData.teams.away.name,
+                    date: fixtureData.fixture.date,
+                    status: fixtureData.fixture.status,
+                    score: fixtureData.score.fulltime
+                };
+            }
+            else {
+                // Try to get from permanent cache
+                const cachedMetadata = getFixtureMetadata(item.fixtureId);
+                if (cachedMetadata) {
+                    console.log(`[GET /ticket] Using cached metadata for fixture ${item.fixtureId}: ${cachedMetadata.home} vs ${cachedMetadata.away}`);
+                    fixtureDetails = {
+                        home: cachedMetadata.home,
+                        away: cachedMetadata.away,
+                        date: cachedMetadata.date,
+                        status: { short: 'UNK', long: 'Unknown Status' }, // Assume unknown if not in API
+                        score: { home: null, away: null }
+                    };
+                    isStarted = true; // Old games are definitely started
                 }
-                if (fixtureData) {
-                    const status = fixtureData.fixture.status.short;
-                    // NS = Not Started. Anything else (LIVE, ft, etc.) is considered 'started' for betting purposes mostly
-                    if (status !== 'NS' && status !== 'TBD') {
-                        isStarted = true;
-                    }
-                    // 2. Fetch Fresh Odds (Only if not started, or for display)
-                    // We need to call /odds endpoint for this fixture
-                    if (!isStarted) {
-                        try {
-                            // This might be heavy. 
-                            // We are looking for marketCode and selectionCode match.
-                            // NOTE: Free API tier limit.
-                            const oddsParams = new URLSearchParams();
-                            oddsParams.set("fixture", item.fixtureId.toString());
-                            // oddsParams.set("bookmaker", "1"); // Bet365 usually
-                            const oRes = yield (0, apiFootball_1.apiFootballGet)("/odds", oddsParams);
-                            if (oRes.response && oRes.response.length > 0) {
-                                const markets = ((_b = (_a = oRes.response[0].bookmakers) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.bets) || [];
-                                // Try to match market
-                                // We saved 'marketCode' e.g. 'MATCH_WINNER'
-                                // The API returns distinct IDs/names. 
-                                // Mapping is tricky without a stored ID. 
-                                // Let's assume we match by Name or Code if available.
-                                // Our frontend saved 'marketCode' which matches API 'id' or mapped internal code?
-                                // In frontend/src/lib/markets.ts we mapped legacy API structure.
-                                // Simplified: Try to find a market with same name as saved 'market' string
-                                // or use saved 'marketCode' if it corresponds to API ID.
-                                // Actually, 'item.market' is the human readable name.
-                                // Let's fallback to no-change if complicated. 
-                                // User said "it brings real time odd".
-                                // Let's try to find matching market by name
-                                const market = markets.find((m) => m.name === item.market || m.id.toString() === item.marketCode);
-                                if (market) {
-                                    const selection = market.values.find((v) => v.value === item.selection || v.value === item.selectionCode);
-                                    if (selection) {
-                                        currentOdd = parseFloat(selection.odd);
-                                    }
-                                }
+            }
+            // Fetch Fresh Odds (Only if not started and fixtureData exists)
+            if (fixtureData && !isStarted) {
+                try {
+                    const oddsParams = new URLSearchParams();
+                    oddsParams.set("fixture", item.fixtureId.toString());
+                    const oRes = yield (0, apiFootball_1.apiFootballGet)("/odds", oddsParams);
+                    if (oRes.response && oRes.response.length > 0) {
+                        const markets = ((_b = (_a = oRes.response[0].bookmakers) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.bets) || [];
+                        const market = markets.find((m) => m.name === item.market || m.id.toString() === item.marketCode);
+                        if (market) {
+                            const selection = market.values.find((v) => v.value === item.selection || v.value === item.selectionCode);
+                            if (selection) {
+                                currentOdd = parseFloat(selection.odd);
                             }
                         }
-                        catch (e) {
-                            console.warn("Failed to fetch odds for item", item.id);
-                        }
                     }
                 }
+                catch (e) {
+                    console.warn("Failed to fetch odds for item", item.id);
+                }
             }
-            catch (error) {
-                console.error(`Failed to fetch details for fixture ${item.fixtureId}`, error);
-            }
-            // Append enriched data to item (we won't save it to DB yet, just return to UI)
+            console.log(`[GET /ticket] Item ${item.id} fixtureId=${item.fixtureId} fixtureDetails=`, fixtureDetails ? `${fixtureDetails.home} vs ${fixtureDetails.away}` : "NULL");
             enrichedItems.push(Object.assign(Object.assign({}, item), { currentOdd,
-                isStarted }));
+                isStarted,
+                // Attach fixture details for frontend display logic (names vs IDs)
+                fixtureDetails }));
         }
         res.json({
             bet: {
@@ -193,24 +248,41 @@ router.post("/check", (req, res) => __awaiter(void 0, void 0, void 0, function* 
         // 1. Fetch Fixtures
         const fixtureIds = [...new Set(bet.items.map(i => i.fixtureId))];
         yield Promise.all(fixtureIds.map((fid) => __awaiter(void 0, void 0, void 0, function* () {
+            const params = new URLSearchParams();
+            params.set("id", fid.toString());
             try {
-                const params = new URLSearchParams();
-                params.set("id", fid.toString());
-                const fRes = yield (0, apiFootball_1.apiFootballGet)("/fixtures", params);
+                // Force refresh to bypass cache for checking results
+                const fRes = yield (0, apiFootball_1.apiFootballGet)("/fixtures", params, 60000, true);
                 if (fRes.response && fRes.response.length > 0) {
                     fixturesMap[fid] = fRes.response[0];
                 }
             }
             catch (e) {
-                console.error(`Failed to fetch fixture ${fid}`, e);
+                console.warn(`Force refresh failed for fixture ${fid} in public check, trying cache...`, e);
+                // Fallback
+                try {
+                    const fResCache = yield (0, apiFootball_1.apiFootballGet)("/fixtures", params, 60000, false);
+                    if (fResCache.response && fResCache.response.length > 0) {
+                        fixturesMap[fid] = fResCache.response[0];
+                    }
+                }
+                catch (e2) {
+                    console.error(`Failed to fetch fixture ${fid}`, e2);
+                }
             }
         })));
         // 2. Check Items
+        // Import fixture metadata cache for fallback
+        const { getFixtureMetadata } = yield Promise.resolve().then(() => __importStar(require("../lib/fixtureMetadataCache")));
         for (const item of bet.items) {
             const fixture = fixturesMap[item.fixtureId];
             let itemResult = item.result;
+            // FALLBACK: If API doesn't have fixture, try permanent cache for details
+            let fallbackDetails = null;
             if (fixture) {
-                const checkRes = (0, resultChecker_1.checkItemResult)(item.marketCode || "UNKNOWN", item.selectionCode || "", item.line, fixture, item.oddValue);
+                const checkRes = (0, resultChecker_1.checkItemResult)(item.marketCode || "UNKNOWN", item.selectionCode || "", item.line, fixture, item.oddValue, item.market, // Fallback: Raw Market Name
+                item.selection // Fallback: Raw Selection Name
+                );
                 if (checkRes === "WON")
                     itemResult = "WON";
                 else if (checkRes === "LOST") {
@@ -230,6 +302,17 @@ router.post("/check", (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 }
             }
             else {
+                const cachedMetadata = getFixtureMetadata(item.fixtureId);
+                if (cachedMetadata) {
+                    console.log(`[POST /check] Using cached metadata for fixture ${item.fixtureId}`);
+                    fallbackDetails = {
+                        home: cachedMetadata.home,
+                        away: cachedMetadata.away,
+                        date: cachedMetadata.date,
+                        status: { short: 'UNK', long: 'Unknown Status' },
+                        score: { home: null, away: null }
+                    };
+                }
                 allItemsResolved = false;
             }
             // Return enriched item for Frontend Display
@@ -241,7 +324,7 @@ router.post("/check", (req, res) => __awaiter(void 0, void 0, void 0, function* 
                     date: fixture.fixture.date,
                     status: fixture.fixture.status,
                     score: fixture.score.fulltime // 90 min score
-                } : null }));
+                } : fallbackDetails }));
         }
         // 3. Update Bet Status
         let newBetStatus = bet.status;
@@ -265,6 +348,128 @@ router.post("/check", (req, res) => __awaiter(void 0, void 0, void 0, function* 
     catch (error) {
         console.error("Check Bet Error:", error);
         res.status(500).json({ error: "Failed to check bet" });
+    }
+}));
+// POST /api/bet/check-results
+// Alias for /check endpoint (for frontend compatibility)
+router.post("/check-results", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { reference } = checkSchema.parse(req.body);
+        const bet = yield prisma_1.prisma.bet.findUnique({
+            where: { reference },
+            include: { items: true }
+        });
+        if (!bet) {
+            return res.status(404).json({ error: "Bet not found" });
+        }
+        // Logic similar to cashier check-slip
+        let allItemsResolved = true;
+        let anyItemLost = false;
+        const updatedItems = [];
+        const fixturesMap = {};
+        // 1. Fetch Fixtures
+        const fixtureIds = [...new Set(bet.items.map(i => i.fixtureId))];
+        yield Promise.all(fixtureIds.map((fid) => __awaiter(void 0, void 0, void 0, function* () {
+            const params = new URLSearchParams();
+            params.set("id", fid.toString());
+            try {
+                // Force refresh to bypass cache for checking results
+                const fRes = yield (0, apiFootball_1.apiFootballGet)("/fixtures", params, 60000, true);
+                if (fRes.response && fRes.response.length > 0) {
+                    fixturesMap[fid] = fRes.response[0];
+                }
+            }
+            catch (e) {
+                console.warn(`Force refresh failed for fixture ${fid} in check-results, trying cache...`, e);
+                // Fallback
+                try {
+                    const fResCache = yield (0, apiFootball_1.apiFootballGet)("/fixtures", params, 60000, false);
+                    if (fResCache.response && fResCache.response.length > 0) {
+                        fixturesMap[fid] = fResCache.response[0];
+                    }
+                }
+                catch (e2) {
+                    console.error(`Failed to fetch fixture ${fid}`, e2);
+                }
+            }
+        })));
+        // 2. Check Items
+        // Import fixture metadata cache for fallback
+        const { getFixtureMetadata } = yield Promise.resolve().then(() => __importStar(require("../lib/fixtureMetadataCache")));
+        for (const item of bet.items) {
+            const fixture = fixturesMap[item.fixtureId];
+            let itemResult = item.result;
+            // FALLBACK: If API doesn't have fixture, try permanent cache for details
+            let fallbackDetails = null;
+            if (fixture) {
+                const checkRes = (0, resultChecker_1.checkItemResult)(item.marketCode || "UNKNOWN", item.selectionCode || "", item.line, fixture, item.oddValue, item.market, // Fallback: Raw Market Name
+                item.selection // Fallback: Raw Selection Name
+                );
+                if (checkRes === "WON")
+                    itemResult = "WON";
+                else if (checkRes === "LOST") {
+                    itemResult = "LOST";
+                    anyItemLost = true;
+                }
+                else if (checkRes === "VOID")
+                    itemResult = "VOID";
+                else
+                    allItemsResolved = false;
+                // Update DB if changed
+                if (itemResult !== item.result) {
+                    yield prisma_1.prisma.betItem.update({
+                        where: { id: item.id },
+                        data: { result: itemResult }
+                    });
+                }
+            }
+            else {
+                const cachedMetadata = getFixtureMetadata(item.fixtureId);
+                if (cachedMetadata) {
+                    console.log(`[POST /check-results] Using cached metadata for fixture ${item.fixtureId}`);
+                    fallbackDetails = {
+                        home: cachedMetadata.home,
+                        away: cachedMetadata.away,
+                        date: cachedMetadata.date,
+                        status: { short: 'UNK', long: 'Unknown Status' },
+                        score: { home: null, away: null }
+                    };
+                }
+                allItemsResolved = false;
+            }
+            // Return enriched item for Frontend Display
+            updatedItems.push(Object.assign(Object.assign({}, item), { result: itemResult, 
+                // Attach fixture details for the detailed table (score, time)
+                fixtureDetails: fixture ? {
+                    home: fixture.teams.home.name,
+                    away: fixture.teams.away.name,
+                    date: fixture.fixture.date,
+                    status: fixture.fixture.status,
+                    score: fixture.score.fulltime // 90 min score
+                } : fallbackDetails }));
+        }
+        // 3. Update Bet Status
+        let newBetStatus = bet.status;
+        if (["CONFIRMED", "PENDING_PAYMENT", "WON", "LOST"].includes(bet.status)) {
+            if (anyItemLost) {
+                newBetStatus = "LOST";
+            }
+            else if (allItemsResolved) {
+                newBetStatus = "WON";
+            }
+        }
+        if (newBetStatus !== bet.status) {
+            const updatedBet = yield prisma_1.prisma.bet.update({
+                where: { id: bet.id },
+                data: { status: newBetStatus }
+            });
+            return res.json({ bet: updatedBet, items: updatedItems });
+        }
+        res.json({ bet, items: updatedItems });
+    }
+    catch (error) {
+        console.error("Check Results Error:", error);
+        res.status(500).json({ error: "Failed to check results" });
     }
 }));
 // PUT /api/bet/update

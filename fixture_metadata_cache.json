@@ -1,4 +1,116 @@
 {
+  "1398141": {
+    "id": 1398141,
+    "home": "Benfica B",
+    "away": "Lusitânia Lourosa",
+    "league": "Segunda Liga",
+    "date": "2026-01-29T18:00:00+00:00"
+  },
+  "1418904": {
+    "id": 1418904,
+    "home": "Pyramids FC",
+    "away": "El Gouna FC",
+    "league": "Premier League",
+    "date": "2026-01-28T18:00:00+00:00"
+  },
+  "1418905": {
+    "id": 1418905,
+    "home": "AL Masry",
+    "away": "Ceramica Cleopatra",
+    "league": "Premier League",
+    "date": "2026-01-28T18:00:00+00:00"
+  },
+  "1418906": {
+    "id": 1418906,
+    "home": "Enppi",
+    "away": "Smouha SC",
+    "league": "Premier League",
+    "date": "2026-01-29T15:00:00+00:00"
+  },
+  "1418907": {
+    "id": 1418907,
+    "home": "Future FC",
+    "away": "Ismaily SC",
+    "league": "Premier League",
+    "date": "2026-01-29T18:00:00+00:00"
+  },
+  "1418908": {
+    "id": 1418908,
+    "home": "Ghazl El Mehalla",
+    "away": "El Geish",
+    "league": "Premier League",
+    "date": "2026-01-29T18:00:00+00:00"
+  },
+  "1436077": {
+    "id": 1436077,
+    "home": "Al-Qadisiyah FC",
+    "away": "Al-Hilal Saudi FC",
+    "league": "Pro League",
+    "date": "2026-01-29T17:30:00+00:00"
+  },
+  "1436081": {
+    "id": 1436081,
+    "home": "Al-Hazm",
+    "away": "Al Shabab",
+    "league": "Pro League",
+    "date": "2026-01-29T17:30:00+00:00"
+  },
+  "1445953": {
+    "id": 1445953,
+    "home": "Zamalek SC",
+    "away": "Petrojet",
+    "league": "Premier League",
+    "date": "2026-01-28T15:00:00+00:00"
+  },
+  "1446731": {
+    "id": 1446731,
+    "home": "Bendel Insurance",
+    "away": "Barau FC",
+    "league": "NPFL",
+    "date": "2026-01-29T15:00:00+00:00"
+  },
+  "1446734": {
+    "id": 1446734,
+    "home": "Ikorodu City",
+    "away": "Shooting Stars",
+    "league": "NPFL",
+    "date": "2026-01-29T15:00:00+00:00"
+  },
+  "1446738": {
+    "id": 1446738,
+    "home": "Warri Wolves",
+    "away": "Remo Stars",
+    "league": "NPFL",
+    "date": "2026-01-29T15:00:00+00:00"
+  },
+  "1449244": {
+    "id": 1449244,
+    "home": "Eastern",
+    "away": "North District",
+    "league": "Premier League",
+    "date": "2026-01-28T12:00:00+00:00"
+  },
+  "1451146": {
+    "id": 1451146,
+    "home": "Napoli",
+    "away": "Chelsea",
+    "league": "UEFA Champions League",
+    "date": "2026-01-28T20:00:00+00:00"
+  },
+  "1451147": {
+    "id": 1451147,
+    "home": "Borussia Dortmund",
+    "away": "Inter",
+    "league": "UEFA Champions League",
+    "date": "2026-01-28T20:00:00+00:00"
+  },
+  "1451148": {
+    "id": 1451148,
+    "home": "Monaco",
+    "away": "Juventus",
+    "league": "UEFA Champions League",
+    "date": "2026-01-28T20:00:00+00:00"
+  },
   "1451285": {
     "id": 1451285,
     "home": "FC Porto",
@@ -10,6 +122,20 @@
     "id": 1451286,
     "home": "VfB Stuttgart",
     "away": "BSC Young Boys",
+    "league": "UEFA Europa League",
+    "date": "2026-01-29T20:00:00+00:00"
+  },
+  "1451287": {
+    "id": 1451287,
+    "home": "Sturm Graz",
+    "away": "Brann",
+    "league": "UEFA Europa League",
+    "date": "2026-01-29T20:00:00+00:00"
+  },
+  "1451288": {
+    "id": 1451288,
+    "home": "GO Ahead Eagles",
+    "away": "SC Braga",
     "league": "UEFA Europa League",
     "date": "2026-01-29T20:00:00+00:00"
   },
@@ -27,6 +153,13 @@
     "league": "UEFA Europa League",
     "date": "2026-01-29T20:00:00+00:00"
   },
+  "1451292": {
+    "id": 1451292,
+    "home": "Real Betis",
+    "away": "Feyenoord",
+    "league": "UEFA Europa League",
+    "date": "2026-01-29T20:00:00+00:00"
+  },
   "1451293": {
     "id": 1451293,
     "home": "FC Basel 1893",
@@ -34,10 +167,38 @@
     "league": "UEFA Europa League",
     "date": "2026-01-29T20:00:00+00:00"
   },
+  "1451294": {
+    "id": 1451294,
+    "home": "Lyon",
+    "away": "PAOK",
+    "league": "UEFA Europa League",
+    "date": "2026-01-29T20:00:00+00:00"
+  },
+  "1451295": {
+    "id": 1451295,
+    "home": "Maccabi Tel Aviv",
+    "away": "Bologna",
+    "league": "UEFA Europa League",
+    "date": "2026-01-29T20:00:00+00:00"
+  },
+  "1451296": {
+    "id": 1451296,
+    "home": "FCSB",
+    "away": "Fenerbahçe",
+    "league": "UEFA Europa League",
+    "date": "2026-01-29T20:00:00+00:00"
+  },
   "1451297": {
     "id": 1451297,
     "home": "Aston Villa",
     "away": "Red Bull Salzburg",
+    "league": "UEFA Europa League",
+    "date": "2026-01-29T20:00:00+00:00"
+  },
+  "1451298": {
+    "id": 1451298,
+    "home": "Genk",
+    "away": "Malmo FF",
     "league": "UEFA Europa League",
     "date": "2026-01-29T20:00:00+00:00"
   },
@@ -62,11 +223,130 @@
     "league": "UEFA Europa League",
     "date": "2026-01-29T20:00:00+00:00"
   },
+  "1451302": {
+    "id": 1451302,
+    "home": "Celtic",
+    "away": "Utrecht",
+    "league": "UEFA Europa League",
+    "date": "2026-01-29T20:00:00+00:00"
+  },
+  "1467564": {
+    "id": 1467564,
+    "home": "Dunbeholden",
+    "away": "Cavalier",
+    "league": "Premier League",
+    "date": "2026-01-29T20:00:00+00:00"
+  },
+  "1467608": {
+    "id": 1467608,
+    "home": "Tivoli Gardens",
+    "away": "Treasure Beach",
+    "league": "Premier League",
+    "date": "2026-01-28T20:00:00+00:00"
+  },
+  "1470625": {
+    "id": 1470625,
+    "home": "Nairobi United",
+    "away": "APS Bomet",
+    "league": "FKF Premier League",
+    "date": "2026-01-28T12:00:00+00:00"
+  },
+  "1476807": {
+    "id": 1476807,
+    "home": "Deportivo Upala",
+    "away": "Municipal Grecia",
+    "league": "Liga de Ascenso",
+    "date": "2026-01-29T19:00:00+00:00"
+  },
+  "1491613": {
+    "id": 1491613,
+    "home": "Al Wakrah",
+    "away": "Al Shahaniya",
+    "league": "Stars League",
+    "date": "2026-01-29T16:45:00+00:00"
+  },
+  "1491836": {
+    "id": 1491836,
+    "home": "Deportivo Riestra",
+    "away": "Defensa Y Justicia",
+    "league": "Liga Profesional Argentina",
+    "date": "2026-01-29T20:00:00+00:00"
+  },
+  "1491844": {
+    "id": 1491844,
+    "home": "Racing Club",
+    "away": "Rosario Central",
+    "league": "Liga Profesional Argentina",
+    "date": "2026-01-28T22:00:00+00:00"
+  },
   "1491845": {
     "id": 1491845,
     "home": "River Plate",
     "away": "Gimnasia L.P.",
     "league": "Liga Profesional Argentina",
     "date": "2026-01-28T23:00:00+00:00"
+  },
+  "1492110": {
+    "id": 1492110,
+    "home": "Atletico-MG",
+    "away": "Palmeiras",
+    "league": "Serie A",
+    "date": "2026-01-28T22:00:00+00:00"
+  },
+  "1492114": {
+    "id": 1492114,
+    "home": "Coritiba",
+    "away": "RB Bragantino",
+    "league": "Serie A",
+    "date": "2026-01-28T22:00:00+00:00"
+  },
+  "1492116": {
+    "id": 1492116,
+    "home": "Internacional",
+    "away": "Atletico Paranaense",
+    "league": "Serie A",
+    "date": "2026-01-28T22:00:00+00:00"
+  },
+  "1492119": {
+    "id": 1492119,
+    "home": "Vitoria",
+    "away": "remo",
+    "league": "Serie A",
+    "date": "2026-01-28T22:00:00+00:00"
+  },
+  "1497977": {
+    "id": 1497977,
+    "home": "Nouakchott Academie",
+    "away": "Tevragh-Zeïne",
+    "league": "Premier League",
+    "date": "2026-01-28T16:00:00+00:00"
+  },
+  "1500605": {
+    "id": 1500605,
+    "home": "Centro Oeste",
+    "away": "Vila Nova",
+    "league": "Goiano - 1",
+    "date": "2026-01-29T18:30:00+00:00"
+  },
+  "1505349": {
+    "id": 1505349,
+    "home": "Everton de Vina",
+    "away": "Union La Calera",
+    "league": "Primera División",
+    "date": "2026-02-02T21:00:00+00:00"
+  },
+  "1506697": {
+    "id": 1506697,
+    "home": "A'Ali",
+    "away": "Al Najma",
+    "league": "Premier League",
+    "date": "2026-01-28T16:00:00+00:00"
+  },
+  "1506698": {
+    "id": 1506698,
+    "home": "Sitra",
+    "away": "Al Riffa",
+    "league": "Premier League",
+    "date": "2026-01-28T16:00:00+00:00"
   }
 }

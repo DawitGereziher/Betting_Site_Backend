@@ -1,0 +1,14 @@
+{
+    "watch": [
+        "src"
+    ],
+    "ext": "ts",
+    "ignore": [
+        "node_modules/**",
+        "dist/**",
+        "*.log",
+        "**/fixture_metadata_cache.json",
+        "fixture_metadata_cache.json"
+    ],
+    "exec": "ts-node src/index.ts"
+}

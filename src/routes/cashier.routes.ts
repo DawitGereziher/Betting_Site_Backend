@@ -281,7 +281,7 @@ router.post('/confirm', async (req, res) => {
                 status: 'CONFIRMED',
                 cashierId: validCashierId, // Will be null if invalid/unknown
                 confirmedAt: new Date(),
-                confirmationReference: `CNF-${Date.now().toString().slice(-6)}`
+                confirmationReference: Date.now().toString()
             },
             include: { items: true }
         });
@@ -357,9 +357,15 @@ router.post("/check-slip", async (req, res) => {
         }));
 
         // Check each item
+        // Import metadata cache
+        const { getFixtureMetadata } = await import("../lib/fixtureMetadataCache");
+
         for (const item of bet.items) {
             const fixture = fixturesMap[item.fixtureId];
             let itemResult = item.result; // Use 'result' field
+
+            // FALLBACK: If API doesn't have fixture, try permanent cache for details
+            let fallbackDetails = null;
 
             if (fixture) {
                 // Check result
@@ -394,6 +400,17 @@ router.post("/check-slip", async (req, res) => {
                     });
                 }
             } else {
+                const cachedMetadata = getFixtureMetadata(item.fixtureId);
+                if (cachedMetadata) {
+                    console.log(`[POST /check-slip] Using cached metadata for fixture ${item.fixtureId}`);
+                    fallbackDetails = {
+                        home: cachedMetadata.home,
+                        away: cachedMetadata.away,
+                        date: cachedMetadata.date,
+                        status: { short: 'UNK', long: 'Unknown Status' },
+                        score: { home: null, away: null }
+                    };
+                }
                 allItemsResolved = false; // Cannot resolving without fixture
             }
 
@@ -406,7 +423,7 @@ router.post("/check-slip", async (req, res) => {
                     date: fixture.fixture.date,
                     status: fixture.fixture.status,
                     score: fixture.score.fulltime
-                } : null
+                } : fallbackDetails
             });
         }
 

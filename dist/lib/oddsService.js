@@ -38,11 +38,12 @@ function extractLine(selectionName, marketName) {
 }
 // Helper to map API-Football odds response to our frontend structure
 function mapOddsToFrontend(oddsResponse) {
+    var _a;
     if (!oddsResponse || !oddsResponse.bookmakers || oddsResponse.bookmakers.length === 0) {
         return []; // No odds available
     }
-    // We take the first bookmaker (usually bet365 or similar provided by API)
-    const bookmaker = oddsResponse.bookmakers[0];
+    // We try to find bookmaker ID 1 (10bet as requested), otherwise fall back to the first one
+    const bookmaker = oddsResponse.bookmakers.find((b) => b.id === 1) || oddsResponse.bookmakers[0];
     const markets = [];
     // Define priority markets to show
     const PRIORITY_MARKETS = [
@@ -65,7 +66,11 @@ function mapOddsToFrontend(oddsResponse) {
             // continue; 
         }
         const marketCode = (0, markets_1.getMarketCode)(bet.name);
+        // Generate a composite ID to ensure uniqueness for markets with same ID/Name but different lines
+        // e.g. "Total Home" (Over 0.5) vs "Total Home" (Over 1.5)
+        const uniqueId = `${bet.id}_${bet.name}_${((_a = bet.values[0]) === null || _a === void 0 ? void 0 : _a.value) || 'Gen'}`.replace(/\s+/g, '_');
         const frontendMarket = {
+            id: uniqueId,
             market: bet.name,
             marketCode: marketCode,
             bets: []
@@ -108,6 +113,7 @@ function getFixtureOdds(fixtureId_1) {
             // 2. Fetch Odds
             const oddsParams = new URLSearchParams();
             oddsParams.set("fixture", fixtureId.toString());
+            oddsParams.set("bookmaker", "1"); // Request 10bet/ID 1 explicitly
             const oddsRes = yield (0, apiFootball_1.apiFootballGet)("/odds", oddsParams, undefined, skipCache);
             let markets = [];
             if (oddsRes.response && oddsRes.response.length > 0) {
@@ -166,6 +172,7 @@ function fetchOddsForDate(date_1) {
                 oddsParams.set("date", date);
                 oddsParams.set("timezone", timezone);
                 oddsParams.set("page", page.toString());
+                oddsParams.set("bookmaker", "1"); // Request 10bet/ID 1
                 const oddsRes = yield (0, apiFootball_1.apiFootballGet)("/odds", oddsParams, undefined, forceRefresh);
                 if (oddsRes.response) {
                     allOdds = allOdds.concat(oddsRes.response);
@@ -296,8 +303,8 @@ function streamOddsForDate(date_1) {
             oddsParams.set("date", date);
             oddsParams.set("timezone", timezone);
             oddsParams.set("page", page.toString());
-            // bookmaker=1 (Bet365)?
-            // oddsParams.set("bookmaker", "1");
+            // bookmaker=1 (10bet/Bet365 requested ID)
+            oddsParams.set("bookmaker", "1");
             const oddsRes = yield (0, apiFootball_1.apiFootballGet)("/odds", oddsParams, undefined, forceRefresh);
             if (oddsRes.response && oddsRes.response.length > 0) {
                 const updates = oddsRes.response.map((o) => ({

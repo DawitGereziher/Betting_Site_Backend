@@ -148,7 +148,7 @@ router.get("/ticket", async (req, res) => {
                         home: cachedMetadata.home,
                         away: cachedMetadata.away,
                         date: cachedMetadata.date,
-                        status: { short: 'FT', long: 'Finished' }, // Assume finished if not in API
+                        status: { short: 'UNK', long: 'Unknown Status' }, // Assume unknown if not in API
                         score: { home: null, away: null }
                     };
                     isStarted = true; // Old games are definitely started
@@ -254,9 +254,15 @@ router.post("/check", async (req, res) => {
         }));
 
         // 2. Check Items
+        // Import fixture metadata cache for fallback
+        const { getFixtureMetadata } = await import("../lib/fixtureMetadataCache");
+
         for (const item of bet.items) {
             const fixture = fixturesMap[item.fixtureId];
             let itemResult = item.result;
+
+            // FALLBACK: If API doesn't have fixture, try permanent cache for details
+            let fallbackDetails = null;
 
             if (fixture) {
                 const checkRes = checkItemResult(
@@ -282,6 +288,17 @@ router.post("/check", async (req, res) => {
                     });
                 }
             } else {
+                const cachedMetadata = getFixtureMetadata(item.fixtureId);
+                if (cachedMetadata) {
+                    console.log(`[POST /check] Using cached metadata for fixture ${item.fixtureId}`);
+                    fallbackDetails = {
+                        home: cachedMetadata.home,
+                        away: cachedMetadata.away,
+                        date: cachedMetadata.date,
+                        status: { short: 'UNK', long: 'Unknown Status' },
+                        score: { home: null, away: null }
+                    };
+                }
                 allItemsResolved = false;
             }
 
@@ -296,7 +313,7 @@ router.post("/check", async (req, res) => {
                     date: fixture.fixture.date,
                     status: fixture.fixture.status,
                     score: fixture.score.fulltime // 90 min score
-                } : null
+                } : fallbackDetails
             });
         }
 
@@ -374,9 +391,15 @@ router.post("/check-results", async (req, res) => {
         }));
 
         // 2. Check Items
+        // Import fixture metadata cache for fallback
+        const { getFixtureMetadata } = await import("../lib/fixtureMetadataCache");
+
         for (const item of bet.items) {
             const fixture = fixturesMap[item.fixtureId];
             let itemResult = item.result;
+
+            // FALLBACK: If API doesn't have fixture, try permanent cache for details
+            let fallbackDetails = null;
 
             if (fixture) {
                 const checkRes = checkItemResult(
@@ -402,6 +425,17 @@ router.post("/check-results", async (req, res) => {
                     });
                 }
             } else {
+                const cachedMetadata = getFixtureMetadata(item.fixtureId);
+                if (cachedMetadata) {
+                    console.log(`[POST /check-results] Using cached metadata for fixture ${item.fixtureId}`);
+                    fallbackDetails = {
+                        home: cachedMetadata.home,
+                        away: cachedMetadata.away,
+                        date: cachedMetadata.date,
+                        status: { short: 'UNK', long: 'Unknown Status' },
+                        score: { home: null, away: null }
+                    };
+                }
                 allItemsResolved = false;
             }
 
@@ -416,7 +450,7 @@ router.post("/check-results", async (req, res) => {
                     date: fixture.fixture.date,
                     status: fixture.fixture.status,
                     score: fixture.score.fulltime // 90 min score
-                } : null
+                } : fallbackDetails
             });
         }
 

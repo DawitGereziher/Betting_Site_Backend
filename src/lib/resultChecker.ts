@@ -33,33 +33,77 @@ function getScores(fixture: ApiFixtureResponse) {
 }
 
 // Fallback Mappings (Based on User JSON)
+// Fallback Mappings (Based on User JSON)
 function getMarketCode(apiName: string): string {
     const lower = apiName.toLowerCase();
-    if (lower === "match winner" || lower === "match result" || lower === "1x2") return "MATCH_WINNER";
-    if (lower === "double chance") return "DOUBLE_CHANCE";
-    if (lower.includes("both teams score") || lower === "both teams to score" || lower === "btts") return "BTTS";
+
+    // SPECIFIC / COMPLEX MARKETS FIRST (Prevent partial matching issues)
+
+    // --- HALF TIME / FULL TIME ---
+    if (lower.includes("ht/ft") || lower.includes("half-time/full-time") || lower.includes("ht/ft double")) return "HALF_TIME_FULL_TIME";
+
+    // --- SCORING HALVES ---
+    if (lower.includes("highest scoring half")) return "HIGHEST_SCORING_HALF";
+    if (lower === "win both halves") return "WIN_BOTH_HALVES";
+
+    // --- CORRECT SCORE ---
+    if (lower.includes("correct score") || lower.includes("exact score")) {
+        // Specific Halves
+        if (lower.includes("first half") || lower.includes("1st half")) return "CORRECT_SCORE_FIRST_HALF";
+        if (lower.includes("second half") || lower.includes("2nd half")) return "CORRECT_SCORE_SECOND_HALF";
+        return "EXACT_SCORE"; // Full Time
+    }
+
+    // --- FIRST HALF MARKETS ---
+    if (lower.includes("first half") || lower.includes("1st half")) {
+        if (lower.includes("winner")) return "FIRST_HALF_WINNER";
+        if (lower.includes("both teams") && (lower.includes("score") || lower.includes("btts"))) return "BTTS_FIRST_HALF";
+        if (lower.includes("goals") || lower.includes("over/under") || lower.includes("total")) return "FIRST_HALF_GOALS";
+        // Fallback for just "First Half"?
+    }
+
+    // --- SECOND HALF MARKETS ---
+    if (lower.includes("second half") || lower.includes("2nd half")) {
+        if (lower.includes("winner")) return "SECOND_HALF_WINNER";
+        if (lower.includes("both teams") && (lower.includes("score") || lower.includes("btts"))) return "BTTS_SECOND_HALF";
+        if (lower.includes("goals") || lower.includes("over/under") || lower.includes("total")) return "SECOND_HALF_GOALS";
+    }
+
+    // --- GENERIC GOALS (Full Time) ---
+    // Check SPECIFIC Team goals first
     if (lower === "total - home" || lower.includes("home team total")) return "HOME_TEAM_TOTAL";
     if (lower === "total - away" || lower.includes("away team total")) return "AWAY_TEAM_TOTAL";
-    if (lower.includes("goals over/under") || lower.includes("total goals")) return "TOTAL_GOALS";
-    if (lower === "draw no bet") return "DRAW_NO_BET";
+
+    // Now generic goals
+    if (lower.includes("goals over/under") || lower.includes("total goals") || lower.includes("goal line")) return "TOTAL_GOALS";
+
+    // --- MATCH WINNER / RESULT ---
+    if (lower === "match winner" || lower === "match result" || lower === "1x2") return "MATCH_WINNER";
+
+    // --- DRAW NO BET ---
+    if (lower === "draw no bet" || lower === "home/away") return "DRAW_NO_BET"; // Fixed: Added Home/Away
+
+    // --- DOUBLE CHANCE ---
+    if (lower === "double chance") return "DOUBLE_CHANCE";
+
+    // --- BTTS (Full Time) ---
+    if (lower.includes("both teams score") || lower === "both teams to score" || lower === "btts") return "BTTS";
+
+    // --- HANDICAPS ---
     if (lower.includes("asian handicap")) return "ASIAN_HANDICAP";
     if (lower.includes("handicap") && !lower.includes("asian")) return "EUROPEAN_HANDICAP";
-    if (lower === "first half winner") return "FIRST_HALF_WINNER";
-    if (lower.includes("first half") && (lower.includes("goals") || lower.includes("over/under"))) return "FIRST_HALF_GOALS";
-    if (lower.includes("second half") && (lower.includes("goals") || lower.includes("over/under"))) return "SECOND_HALF_GOALS";
-    if (lower === "second half winner") return "SECOND_HALF_WINNER";
-    if (lower.includes("ht/ft") || lower.includes("half-time/full-time") || lower.includes("ht/ft double")) return "HALF_TIME_FULL_TIME";
-    if (lower.includes("correct score") || lower.includes("exact score")) return "EXACT_SCORE";
+
+    // --- SPECIALS / OTHERS ---
     if (lower.includes("odd/even")) return "MATCH_GOALS_ODD_EVEN";
     if (lower.includes("clean sheet") && lower.includes("home")) return "CLEAN_SHEET_HOME";
     if (lower.includes("clean sheet") && lower.includes("away")) return "CLEAN_SHEET_AWAY";
     if (lower.includes("win to nil") && lower.includes("home")) return "WIN_TO_NIL_HOME";
     if (lower.includes("win to nil") && lower.includes("away")) return "WIN_TO_NIL_AWAY";
-    if (lower.includes("highest scoring half")) return "HIGHEST_SCORING_HALF";
+
     if (lower === "team to score first" || lower.includes("first team to score")) return "TEAM_TO_SCORE_FIRST";
     if (lower === "team to score last" || lower.includes("last team to score")) return "TEAM_TO_SCORE_LAST";
-    if (lower === "win both halves") return "WIN_BOTH_HALVES";
 
+    // If we reach here, it's truly unknown
     return "UNKNOWN";
 }
 
@@ -256,6 +300,16 @@ export function checkItemResult(
             if (selectionCode === "NO") return (s.ft.home === 0 || s.ft.away === 0) ? "WON" : "LOST";
             break;
 
+        case "BTTS_FIRST_HALF":
+            if (selectionCode === "YES") return (s.ht.home > 0 && s.ht.away > 0) ? "WON" : "LOST";
+            if (selectionCode === "NO") return (s.ht.home === 0 || s.ht.away === 0) ? "WON" : "LOST";
+            break;
+
+        case "BTTS_SECOND_HALF":
+            if (selectionCode === "YES") return (s.secondHalf.home > 0 && s.secondHalf.away > 0) ? "WON" : "LOST";
+            if (selectionCode === "NO") return (s.secondHalf.home === 0 || s.secondHalf.away === 0) ? "WON" : "LOST";
+            break;
+
         case "WIN_TO_NIL_HOME":
             // Home wins AND Away scores 0
             if (selectionCode === "YES") return (s.ft.home > s.ft.away && s.ft.away === 0) ? "WON" : "LOST";
@@ -404,6 +458,14 @@ export function checkItemResult(
 
     // Default fallback if market not recognized or no logic matched
     console.log(`[ResultChecker] Unhandled Market/Selection: ${marketCode} / ${selectionCode} (Line: ${line}) for Fixture ${fixture.fixture.id}`);
+
+    // Debugging: If game is finished but we are returning PENDING, it's weird.
+    if (['FT', 'AET', 'PEN', 'AWD', 'WO'].includes(status)) {
+        console.warn(`[ResultChecker] WARNING: Returning PENDING for finished game ${fixture.fixture.id} (${status})!`);
+        console.warn(`Details: Market="${marketName}" Code="${marketCode}" | Selection="${selectionName}" Code="${selectionCode}" | Line="${line}"`);
+        console.warn(`Scores: FT=${s.ft.home}-${s.ft.away} | HT=${s.ht.home}-${s.ht.away}`);
+    }
+
     return "PENDING";
 }
 

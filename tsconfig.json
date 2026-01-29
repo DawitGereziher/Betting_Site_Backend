@@ -9,7 +9,4 @@
         "strict": true,
         "skipLibCheck": true
     },
-    "exclude": [
-        "count_bets.ts"
-    ]
 }

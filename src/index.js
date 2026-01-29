@@ -31,6 +31,21 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+// ---- HEALTH CHECK ----
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        status: "ok",
+        service: "betting-backend",
+        uptime_seconds: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString(),
+        port: PORT,
+        node_version: process.version,
+        memory: {
+            rss: process.memoryUsage().rss,
+            heapUsed: process.memoryUsage().heapUsed
+        }
+    });
+});
 
 app.get("/", (req, res) => {
     res.send("Betting API Backend Running");

@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for Admin and Cashier
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  role      Role     @default(CASHIER)
+  createdAt DateTime @default(now())
+  bets      Bet[]    @relation("CashierBets")
+  payouts   Bet[]    @relation("CashierPayouts")
+}
+
+model Bet {
+  id                  String       @id @default(uuid())
+  reference           String       @unique
+  // Optional link to the cashier who placed/confirmed it
+  cashier             User?        @relation("CashierBets", fields: [cashierId], references: [id])
+  cashierId           String?
+  
+  amount              Float
+  totalOdds           Float
+  status              BetStatus    @default(PENDING_PAYMENT)
+  createdAt           DateTime     @default(now())
+  confirmedAt         DateTime?
+  confirmationReference String?
+  
+  // Cashier Operations
+  cancelledAt         DateTime?
+  paidAt              DateTime?
+  payoutAmount        Float?
+  paidByUserId        String?
+  paidByUser          User?        @relation("CashierPayouts", fields: [paidByUserId], references: [id])
+
+  items               BetItem[]
+}
+
+enum Role {
+  ADMIN
+  CASHIER
+}
+
+model BetItem {
+  id            String    @id @default(uuid())
+  bet           Bet       @relation(fields: [betId], references: [id])
+  betId         String
+  fixtureId     Int
+  market        String    // Legacy field
+  selection     String    // Legacy field
+  marketCode    String?   // e.g. "MATCH_WINNER"
+  selectionCode String?   // e.g. "HOME"
+  line          Float?    // e.g. 2.5
+  oddValue      Float
+  result        BetResult @default(PENDING)
+}
+
+enum BetStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  WON
+  LOST
+  PAID
+}
+
+enum BetResult {
+  PENDING
+  WON
+  LOST
+  VOID
+  HALF_WON
+  HALF_LOST
+}
+
+

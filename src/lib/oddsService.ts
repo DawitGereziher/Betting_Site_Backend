@@ -1,0 +1,401 @@
+import { apiFootballGet } from "./apiFootball";
+import { getFromCache, setInCache } from "./cache";
+import { getMarketCode, getSelectionCode } from "./markets";
+
+export interface FrontendSelection {
+    selection: string;
+    selectionCode: string;
+    odd: number;
+    line?: number | null;
+}
+
+export interface FrontendMarket {
+    market: string;
+    marketCode: string;
+    bets: FrontendSelection[];
+}
+
+export interface FrontendFixture {
+    id: number;
+    date: string;
+    status: string;
+    homeTeam: string;
+    awayTeam: string;
+    homeScore: number | null;
+    awayScore: number | null;
+    markets: FrontendMarket[];
+}
+
+export interface FrontendLeague {
+    id: number;
+    name: string;
+    country: string;
+    logo: string;
+    flag: string;
+    fixtures: FrontendFixture[];
+}
+
+export interface FrontendOddsResponse {
+    date: string;
+    leagues: FrontendLeague[];
+}
+
+// Helper to normalize odd values
+function normalizeOdd(value: any): number {
+    return parseFloat(value);
+}
+
+// Helper to extract line from selection name (e.g. "Over 2.5" -> 2.5)
+function extractLine(selectionName: string | number, marketName: string): number | null | undefined {
+    // Ensure string
+    const nameStr = String(selectionName);
+
+    // Common patterns: "Over 2.5", "Under 3.5", "Home -1", "Asian Handicap +0.5"
+    // We look for a number (integer or decimal, potentially negative) at the end of the string
+    // or specifically associated with typical line markets.
+
+    // 1. If it's a simple Over/Under or Handicap
+    if (marketName.includes("Over/Under") || marketName.includes("Handicap") || marketName.includes("Goal")) {
+        // Match number at the end: "Over 2.5" -> 2.5
+        const match = nameStr.match(/([+-]?\d+(\.\d+)?)$/);
+        if (match) {
+            return parseFloat(match[0]);
+        }
+    }
+
+    return null;
+}
+
+// Helper to map API-Football odds response to our frontend structure
+function mapOddsToFrontend(oddsResponse: any): FrontendMarket[] {
+    if (!oddsResponse || !oddsResponse.bookmakers || oddsResponse.bookmakers.length === 0) {
+        return []; // No odds available
+    }
+
+    // We try to find bookmaker ID 1 (10bet as requested), otherwise fall back to the first one
+    const bookmaker = oddsResponse.bookmakers.find((b: any) => b.id === 1) || oddsResponse.bookmakers[0];
+    const markets: FrontendMarket[] = [];
+
+    // Define priority markets to show
+    const PRIORITY_MARKETS = [
+        "Match Winner",
+        "Home/Away",
+        "Second Half Winner",
+        "Goals Over/Under",
+        "Over/Under",
+        "Both Teams To Score",
+        "Double Chance",
+        "Handicap Result", // 3-way handicap
+        "Asian Handicap",
+        "Correct Score",
+        "Half Time/Full Time"
+    ];
+
+    for (const bet of bookmaker.bets) {
+        // Filter or prioritize markets if needed. For now, we take common ones.
+        if (!PRIORITY_MARKETS.includes(bet.name) && !bet.name.includes("Winner") && !bet.name.includes("Goals")) {
+            // Optional: Skip obscure markets to reduce payload
+            // continue; 
+        }
+
+        const marketCode = getMarketCode(bet.name);
+
+        const frontendMarket: FrontendMarket = {
+            market: bet.name,
+            marketCode: marketCode,
+            bets: []
+        };
+
+        for (const value of bet.values) {
+            const { code: selectionCode } = getSelectionCode(value.value, marketCode);
+            // Handle "lines" for handicaps/over-under
+
+            let selectionName = value.value;
+            // Simple parsing for Over/Under to extract line if needed
+            const lineValue = extractLine(selectionName, bet.name);
+
+            const oddValue = normalizeOdd(value.odd);
+
+            frontendMarket.bets.push({
+                selection: selectionName,
+                selectionCode: selectionCode,
+                odd: oddValue,
+                line: lineValue // We might parse this later if needed for precise logic
+            });
+        }
+        markets.push(frontendMarket);
+    }
+
+    return markets;
+}
+
+export async function getFixtureOdds(fixtureId: number, skipCache: boolean = false): Promise<any | null> {
+    const cacheKey = `fixture_odds:${fixtureId}`;
+    if (!skipCache) {
+        const cached = await getFromCache(cacheKey);
+        if (cached) return cached;
+    }
+
+    try {
+        // 1. Fetch Fixture Details (for status/names)
+        const fixtureParams = new URLSearchParams();
+        fixtureParams.set("id", fixtureId.toString());
+        const fixtureRes = await apiFootballGet("/fixtures", fixtureParams, undefined, skipCache);
+
+        if (!fixtureRes.response || fixtureRes.response.length === 0) {
+            return null;
+        }
+        const fixtureData = fixtureRes.response[0];
+
+        // 2. Fetch Odds
+        const oddsParams = new URLSearchParams();
+        oddsParams.set("fixture", fixtureId.toString());
+        oddsParams.set("bookmaker", "1"); // Request 10bet/ID 1 explicitly
+        const oddsRes = await apiFootballGet("/odds", oddsParams, undefined, skipCache);
+
+        let markets: FrontendMarket[] = [];
+        if (oddsRes.response && oddsRes.response.length > 0) {
+            markets = mapOddsToFrontend(oddsRes.response[0]);
+        }
+
+        const result = {
+            fixture: fixtureData.fixture,
+            league: fixtureData.league,
+            teams: fixtureData.teams,
+            goals: fixtureData.goals,
+            score: fixtureData.score, // precise score
+            status: fixtureData.fixture.status, // short and long
+            markets: markets
+        };
+
+        // Cache specifically deep details for short time (e.g. 1 min for live, 5 min for pre-match)
+        await setInCache(cacheKey, result, 60 * 1000);
+
+        return result;
+
+    } catch (error) {
+        console.error(`Error fetching detailed odds for fixture ${fixtureId}:`, error);
+        return null;
+    }
+}
+
+export async function fetchOddsForDate(date: string, timezone: string = "Africa/Addis_Ababa", forceRefresh: boolean = false): Promise<FrontendOddsResponse> {
+    const cacheKey = `odds_feed:${date}:${timezone}`;
+
+    if (!forceRefresh) {
+        const cached = await getFromCache<FrontendOddsResponse>(cacheKey);
+        if (cached) {
+            console.log(`Serving odds for ${date} from cache`);
+            return cached;
+        }
+    }
+
+    console.log(`Fetching freshness for date ${date}...`);
+
+    try {
+        // 1. Fetch Fixtures for the date
+        const fixturesParams = new URLSearchParams();
+        fixturesParams.set("date", date);
+        fixturesParams.set("timezone", timezone);
+
+        const fixturesRes = await apiFootballGet("/fixtures", fixturesParams, undefined, forceRefresh);
+
+        if (!fixturesRes.response) {
+            throw new Error("Failed to fetch fixtures from API");
+        }
+
+        const fixtures = fixturesRes.response;
+        const leaguesMap = new Map<number, FrontendLeague>();
+
+        // 2. We need odds for these fixtures.
+        console.log(`Fetching odds for ${date} (this may take time)...`);
+
+        // Recursive / sequential fetch of all odds pages
+        let allOdds: any[] = [];
+        let page = 1;
+        let totalPages = 1;
+
+        do {
+            const oddsParams = new URLSearchParams();
+            oddsParams.set("date", date);
+            oddsParams.set("timezone", timezone);
+            oddsParams.set("page", page.toString());
+            oddsParams.set("bookmaker", "1"); // Request 10bet/ID 1
+
+            const oddsRes = await apiFootballGet("/odds", oddsParams, undefined, forceRefresh);
+            if (oddsRes.response) {
+                allOdds = allOdds.concat(oddsRes.response);
+                totalPages = oddsRes.paging?.total || 1;
+            }
+            page++;
+        } while (page <= totalPages && page <= 5); // Safety limit 5 pages for now to prevent timeouts
+
+        // Map odds to fixture IDs
+        const oddsMap = new Map<number, any>();
+        allOdds.forEach((o: any) => {
+            oddsMap.set(o.fixture.id, o);
+        });
+
+        // 3. Merge Fixtures and Odds
+        for (const f of fixtures) {
+            // STRICT FILTERING:
+            // 1. Status must be "Not Started" (NS) or "Time to be Defined" (TBD)
+            if (!["NS", "TBD"].includes(f.fixture.status.short)) {
+                continue;
+            }
+
+            // 2. Date Validation: Ensure the fixture's local date matches the requested date
+            // The API usually handles this, but we double-check to avoid "wrong date" issues
+            const fixtureDate = new Date(f.fixture.date);
+            const localDateStr = fixtureDate.toLocaleDateString("en-CA", { timeZone: timezone });
+            if (localDateStr !== date) {
+                continue;
+            }
+
+            // Helper to get or create league
+            const leagueId = f.league.id;
+            if (!leaguesMap.has(leagueId)) {
+                leaguesMap.set(leagueId, {
+                    id: leagueId,
+                    name: f.league.name,
+                    country: f.league.country,
+                    logo: f.league.logo,
+                    flag: f.league.flag,
+                    fixtures: []
+                });
+            }
+
+            const fixtureOdds = oddsMap.get(f.fixture.id);
+            const markets = fixtureOdds ? mapOddsToFrontend(fixtureOdds) : [];
+
+            leaguesMap.get(leagueId)!.fixtures.push({
+                id: f.fixture.id,
+                date: f.fixture.date, // ISO string
+                status: f.fixture.status.short, // NS, FT, LIVE etc
+                homeTeam: f.teams.home.name,
+                awayTeam: f.teams.away.name,
+                homeScore: f.goals.home,
+                awayScore: f.goals.away,
+                markets: markets
+            });
+        }
+
+        const leagues = Array.from(leaguesMap.values());
+
+        const response: FrontendOddsResponse = {
+            date: date,
+            leagues: leagues
+        };
+
+        // Cache for 1 minute
+        await setInCache(cacheKey, response, 60 * 1000);
+
+        return response;
+
+    } catch (error) {
+        console.error("Error in fetchOddsForDate:", error);
+        throw error;
+    }
+}
+
+// STREAMING IMPLEMENTATION
+export async function streamOddsForDate(
+    date: string,
+    timezone: string = "Africa/Addis_Ababa",
+    onChunk: (type: "fixtures" | "odds_update", data: any) => void,
+    forceRefresh: boolean = false
+): Promise<void> {
+
+    // 1. Fetch ALL fixtures first (1 call) - FAST
+    const fixturesParams = new URLSearchParams();
+    fixturesParams.set("date", date);
+    fixturesParams.set("timezone", timezone);
+
+    const fixturesRes = await apiFootballGet("/fixtures", fixturesParams, undefined, forceRefresh);
+
+    if (!fixturesRes.response) {
+        // If fails, we can't do anything
+        return;
+    }
+
+    const fixtures = fixturesRes.response;
+    const leaguesMap = new Map<number, FrontendLeague>();
+
+    // Sort valid fixtures first
+    const ALLOWED_STATUSES = new Set(["TBD", "NS"]);
+
+    // Corrected variable name from fixturesBatch to fixtures
+    fixtures.forEach((f: any) => {
+        // Filter by status if needed, but for "pipeline" maybe show all?
+        // User requested removing live games:
+        if (!ALLOWED_STATUSES.has(f.fixture.status.short)) {
+            return;
+        }
+
+        // Date Validation
+        const fixtureDate = new Date(f.fixture.date);
+        const localDateStr = fixtureDate.toLocaleDateString("en-CA", { timeZone: timezone });
+        if (localDateStr !== date) {
+            return;
+        }
+
+        const leagueId = f.league.id;
+        if (!leaguesMap.has(leagueId)) {
+            leaguesMap.set(leagueId, {
+                id: leagueId,
+                name: f.league.name,
+                country: f.league.country,
+                logo: f.league.logo,
+                flag: f.league.flag,
+                fixtures: []
+            });
+        }
+
+        leaguesMap.get(leagueId)!.fixtures.push({
+            id: f.fixture.id,
+            date: f.fixture.date,
+            status: f.fixture.status.short,
+            homeTeam: f.teams.home.name,
+            awayTeam: f.teams.away.name,
+            homeScore: f.goals.home,
+            awayScore: f.goals.away,
+            markets: [] // EMPTY initially
+        });
+    });
+
+    const leagues = Array.from(leaguesMap.values());
+
+    // EMIT SKELETON
+    onChunk("fixtures", leagues);
+
+    // 2. Iterate pages of Odds
+    let page = 1;
+    let totalPages = 1;
+
+    // We can fetch pages in parallel or series. Series for now to stream steadily.
+
+    do {
+        const oddsParams = new URLSearchParams();
+        oddsParams.set("date", date);
+        oddsParams.set("timezone", timezone);
+        oddsParams.set("page", page.toString());
+        // bookmaker=1 (10bet/Bet365 requested ID)
+        oddsParams.set("bookmaker", "1");
+
+        const oddsRes = await apiFootballGet("/odds", oddsParams, undefined, forceRefresh);
+
+        if (oddsRes.response && oddsRes.response.length > 0) {
+            const updates = oddsRes.response.map((o: any) => ({
+                fixtureId: o.fixture.id,
+                markets: mapOddsToFrontend(o)
+            }));
+
+            // EMIT CHUNK
+            onChunk("odds_update", updates);
+        }
+
+        totalPages = oddsRes.paging?.total || 1;
+        page++;
+
+    } while (page <= totalPages && page <= 20); // Cap at 20 pages for safety
+}

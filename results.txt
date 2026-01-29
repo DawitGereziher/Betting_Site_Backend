@@ -1,0 +1,27 @@
+--- Verifying Result Logic ---
+[PASS] MATCH_WINNER AWAY (Line: null) -> Got: WON, Expected: WON
+[PASS] MATCH_WINNER HOME (Line: null) -> Got: LOST, Expected: LOST
+[PASS] MATCH_WINNER DRAW (Line: null) -> Got: LOST, Expected: LOST
+[PASS] HOME_AWAY AWAY (Line: null) -> Got: WON, Expected: WON
+[PASS] DOUBLE_CHANCE X2 (Line: null) -> Got: WON, Expected: WON
+[PASS] DOUBLE_CHANCE 1X (Line: null) -> Got: LOST, Expected: LOST
+[PASS] TOTAL_GOALS OVER (Line: 0.5) -> Got: WON, Expected: WON
+[PASS] TOTAL_GOALS UNDER (Line: 1.5) -> Got: WON, Expected: WON
+[PASS] TOTAL_GOALS OVER (Line: 1.5) -> Got: LOST, Expected: LOST
+[PASS] FIRST_HALF_GOALS UNDER (Line: 0.5) -> Got: WON, Expected: WON
+[PASS] SECOND_HALF_GOALS OVER (Line: 0.5) -> Got: WON, Expected: WON
+[PASS] HT_FT_DOUBLE DRAW/AWAY (Line: null) -> Got: WON, Expected: WON
+[PASS] HT_FT_DOUBLE DRAW/DRAW (Line: null) -> Got: LOST, Expected: LOST
+[PASS] BTTS NO (Line: null) -> Got: WON, Expected: WON
+[PASS] BTTS YES (Line: null) -> Got: LOST, Expected: LOST
+[PASS] WIN_TO_NIL_AWAY YES (Line: null) -> Got: WON, Expected: WON
+[PASS] WIN_TO_NIL_HOME YES (Line: null) -> Got: LOST, Expected: LOST
+[PASS] HIGHEST_SCORING_HALF 2ND_HALF (Line: null) -> Got: WON, Expected: WON
+[PASS] HIGHEST_SCORING_HALF 1ST_HALF (Line: null) -> Got: LOST, Expected: LOST
+[PASS] EXACT_SCORE 0-1 (Line: null) -> Got: WON, Expected: WON
+[PASS] EXACT_SCORE 0-0 (Line: null) -> Got: LOST, Expected: LOST
+[PASS] TEAM_TO_SCORE_FIRST AWAY (Line: null) -> Got: WON, Expected: WON
+[PASS] TEAM_TO_SCORE_FIRST HOME (Line: null) -> Got: LOST, Expected: LOST
+[PASS] ASIAN_HANDICAP HOME (Line: 1.5) -> Got: WON, Expected: WON
+[PASS] ASIAN_HANDICAP AWAY (Line: -1.5) -> Got: LOST, Expected: LOST
+--- Result: 25/25 Passed ---
